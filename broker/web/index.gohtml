@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.jsdelivr.net/gh/alpinejs/alpine@v2.8.2/dist/alpine.min.js" defer></script>
+  <title>Corretora {{ .Broker }}</title>
+</head>
+<body>
+<h1>Corretora {{ .Broker }}</h1>
+
+<div x-data="app()" x-init="init()">
+  <p x-text="ui.error" style="height: 20px; color: red; font-weight: bold;"></p>
+
+  <form @submit.prevent="update('CONNECT')">
+    <fieldset x-bind:disabled="!isConnected">
+      <legend>Configurar</legend>
+      <label>
+        <span>Endereço do RabbitMQ:</span>
+        <input type="text" x-on:input.debounce="update()" x-model="data.configuration.rabbitMQAddress"
+               x-bind:disabled="data.control.isConnected" size="50"
+               required>
+      </label>
+      <input type="submit" x-bind:disabled="data.control.isConnected" value="Conectar">
+      <br/><br/>
+      <button type="button" x-bind:disabled="!isConnected || !data.control.isConnected" @click="update('RESET')">
+        Resetar
+      </button>
+    </fieldset>
+  </form>
+  <br/><br/>
+
+  <form @submit.prevent="update('ORDER')">
+    <fieldset x-bind:disabled="!isConnected || !data.control.isConnected">
+      <legend>Enviar ordem</legend>
+      <label>
+        <span>Quantidade:</span>
+        <input type="number" x-on:input.debounce="update()" x-model="data.order.quantity" size="5" min="1" required>
+      </label>
+      <br/><br/>
+      <label>
+        <span>Valor:</span>
+        <input type="number" x-on:input.debounce="update()" x-model="data.order.value" size="5" min="0" step=".01"
+               required>
+      </label>
+      <br/><br/>
+      <label>
+        <span>Ativo:</span>
+        <select x-on:change="update()" x-model="data.order.activeStock">
+          <template x-for="topic in Object.keys(data.topics.actives)">
+            <option :key="topic" :value="topic" x-text="topic"></option>
+          </template>
+        </select>
+      </label>
+      <br/><br/>
+      <label>
+        <input type="radio" x-on:change="update()" x-model="data.order.operation" value="compra"
+               :checked="data.order.operation === 'compra'">
+        <span>Compra</span>
+      </label>
+      <br/><br/>
+      <label>
+        <input type="radio" x-on:change="update()" x-model="data.order.operation" value="venda"
+               :checked="data.order.operation === 'venda'">
+        <span>Venda</span>
+      </label>
+      <br/><br/>
+      <input type="submit" value="Enviar">
+    </fieldset>
+  </form>
+  <br/><br/>
+
+  <form>
+    <fieldset x-bind:disabled="!isConnected || !data.control.isConnected">
+      <legend>Assinar tópicos</legend>
+      <template x-for="[topic, value] in Object.entries(data.topics.actives)" :key="topic">
+        <label>
+          <input type="checkbox" x-on:change="update()" x-model="data.topics.actives[topic]" :value="topic"
+                 :checked="value">
+          <span x-text="topic"></span>
+        </label>
+      </template>
+      <br/><br/>
+      <label>
+        <span>Eventos:</span><br/>
+        <textarea rows="10" :value="data.topics.events.slice().reverse().join('\n')" style="resize: none; width: 100%;"
+                  readonly></textarea>
+      </label>
+    </fieldset>
+  </form>
+</div>
+
+<script>
+  const socket = new WebSocket(`ws:\/\/${location.host}\/events`);
+
+  const app = () => ({
+    data: {{ .Data }},
+
+    isConnected: true,
+
+    ui: {
+      error: '',
+    },
+
+    init() {
+      socket.addEventListener('close', () => {
+        setTimeout(() => {
+          this.ui.error = 'Erro: a conexão com o servidor foi perdida'
+          this.isConnected = false;
+        }, 2000);
+      });
+
+      socket.addEventListener('message', (event) => {
+        this.data = JSON.parse(event.data);
+
+        if (this.data['error']) {
+          this.showError(this.data['error']);
+          this.data['error'] = '';
+        }
+      });
+    },
+
+    update(action) {
+      this.data['action'] = action || '';
+      socket.send(JSON.stringify(this.data));
+    },
+
+    showError(error) {
+      this.ui.error = `Erro: ${error}`;
+      setTimeout(() => {
+        this.ui.error = '';
+      }, 5000);
+    },
+  });
+</script>
+</body>
+</html>

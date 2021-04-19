@@ -1,0 +1,52 @@
+version: "3.5"
+
+x-environment:
+  &environment
+  environment:
+    - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+    - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+    - RABBITMQ_HOST=${RABBITMQ_HOST:-rabbitmq}
+    - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+
+services:
+  stock_exchange:
+    image: stock-exchange
+    build:
+      context: stock-exchange
+      dockerfile: ../Dockerfile
+    <<: *environment
+    volumes:
+      - ./stock-exchange:/go/src/app
+    ports:
+      - 3000:80
+    depends_on:
+      - rabbitmq
+
+  broker:
+    image: broker
+    build:
+      context: broker
+      dockerfile: ../Dockerfile
+    <<: *environment
+    volumes:
+      - ./broker:/go/src/app
+    ports:
+      - 3001-3005:80
+    deploy:
+      replicas: 5
+    depends_on:
+      - stock_exchange
+
+  rabbitmq:
+    image: rabbitmq:3.8.14-management-alpine
+    logging:
+      driver: none
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS:-guest}
+    ports:
+      - 15672:15672
+
+networks:
+  default:
+    name: bovespa

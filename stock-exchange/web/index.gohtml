@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.jsdelivr.net/gh/alpinejs/alpine@v2.8.2/dist/alpine.min.js" defer></script>
+  <title>Bolsa de valores</title>
+</head>
+<body>
+<h1>Bolsa de valores</h1>
+
+<div x-data="app()" x-init="init()">
+  <p x-text="ui.error" style="height: 20px; color: red; font-weight: bold;"></p>
+
+  <form @submit.prevent="update('CONNECT')">
+    <fieldset x-bind:disabled="!isConnected">
+      <legend>Configurar</legend>
+      <label>
+        <span>Endereço do RabbitMQ:</span>
+        <input type="text" x-on:input.debounce="update()" x-model="data.configuration.rabbitMQAddress"
+               x-bind:disabled="data.control.isConnected" size="50"
+               required>
+      </label>
+      <input type="submit" x-bind:disabled="data.control.isConnected" value="Conectar">
+      <br/><br/>
+      <button type="button" x-bind:disabled="!isConnected || !data.control.isConnected" @click="update('RESET')">
+        Resetar
+      </button>
+    </fieldset>
+  </form>
+  <br/><br/>
+
+  <form>
+    <fieldset>
+      <legend>Logs</legend>
+      <label>
+        <span>Eventos:</span><br>
+        <textarea rows="30" :value="data.events.slice().reverse().join('\n')" style="resize: none; width: 100%;"
+                  readonly></textarea>
+      </label>
+    </fieldset>
+  </form>
+</div>
+
+<script>
+  const socket = new WebSocket(`ws:\/\/${location.host}\/events`);
+
+  const app = () => ({
+    data: {{ .Data }},
+
+    isConnected: true,
+
+    ui: {
+      error: '',
+    },
+
+    init() {
+      socket.addEventListener('close', () => {
+        setTimeout(() => {
+          this.ui.error = 'Erro: a conexão com o servidor foi perdida'
+          this.isConnected = false;
+        }, 2000);
+      });
+
+      socket.addEventListener('message', (event) => {
+        this.data = JSON.parse(event.data);
+
+        if (this.data['error']) {
+          this.showError(this.data['error']);
+          this.data['error'] = '';
+        }
+      });
+    },
+
+    update(action) {
+      this.data['action'] = action || '';
+      socket.send(JSON.stringify(this.data));
+    },
+
+    showError(error) {
+      this.ui.error = `Erro: ${error}`;
+      setTimeout(() => {
+        this.ui.error = '';
+      }, 5000);
+    },
+  });
+</script>
+</body>
+</html>
